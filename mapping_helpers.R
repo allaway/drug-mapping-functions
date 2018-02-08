@@ -1,32 +1,63 @@
+options(java.parameters = "-Xmx8g" ) 
+library(shiny)
+library(DT)
 library(rJava)
 library(rcdk)
 library(fingerprint)
+library(enrichR)
+library(webchem)
 library(plyr)
 library(tidyverse)
-library(synapseClient)
-synapseLogin()
+library(synapser)
+synLogin()
 
-evo <- readRDS(synGet("syn11658938")@filePath)
-evo$Structure_ID <- as.character(evo$Structure_ID)
-evo$Common_Name <- as.character(evo$Common_Name)
-evo <- evo %>% filter(N_quantitative >= N_inactive | N_qualitative >= N_inactive | N_DGIDB > 0)
+db <- readRDS(synGet("syn11712148")$path) %>% 
+  filter(!is.na(hugo_gene)) %>% 
+  select(internal_id, common_name, hugo_gene, mean_pchembl, n_quantitative, n_qualitative)
 
-db.genes <- unique(evo$Hugo_Gene)
+fp.db <- readRDS(synGet("syn11693143")$path)
 
-fp.evo <- readRDS(synGet("syn11658941")@filePath)[unique(evo$Original_molecule_SMILES)]
+is.smiles <- function(x, verbose = TRUE) { ##corrected version from webchem
+  if (!requireNamespace("rcdk", quietly = TRUE)) {
+    stop("rcdk needed for this function to work. Please install it.",
+         call. = FALSE)
+  }
+  # x <- 'Clc(c(Cl)c(Cl)c1C(=O)O)c(Cl)c1Cl'
+  if (length(x) > 1) {
+    stop('Cannot handle multiple input strings.')
+  }
+  out <- try(rcdk::parse.smiles(x), silent = TRUE)
+  if (inherits(out[[1]], "try-error") | is.null(out[[1]])) {
+    return(FALSE)
+  } else {
+    return(TRUE)
+  }
+}
 
-##converts SMILES string to fingerprint
 parseInputFingerprint <- function(input) {
-  input.mol <- parse.smiles(input)
-  lapply(input.mol, do.typing)
-  lapply(input.mol, do.aromaticity)
-  lapply(input.mol, do.isotopes)
-  fp.inp <- lapply(input.mol, get.fingerprint, type = "extended")
+  test_smiles <- is.smiles(input)
+  if(is.smiles(input==TRUE)){
+    input.mol <- parse.smiles(as.character(input))
+    lapply(input.mol, do.typing)
+    lapply(input.mol, do.aromaticity)
+    lapply(input.mol, do.isotopes)
+    fp.inp <- lapply(input.mol, get.fingerprint, type = "extended")
+  }else{
+    print('Please input a valid SMILES string.')
+  }
+}
+
+
+convertDrugToSmiles <- function(input) {
+  filt <- filter(db.names, common_name == input) %>% dplyr::select(smiles)
+  filt
 }
 
 getTargetList <- function(selectdrugs) {
-  targets <- filter(evo, Common_Name %in% selectdrugs) %>% dplyr::select(Common_Name, Hugo_Gene, MedianActivity_nM, N_quantitative, N_qualitative, 
-                                                                         N_inactive, N_DGIDB, Confidence_Score) %>% arrange(-N_quantitative)
+  targets <- filter(db, common_name %in% selectdrugs) %>% 
+    arrange(-n_quantitative) %>%
+    select(common_name, hugo_gene, mean_pchembl, n_quantitative, n_qualitative)
+  
   if (nrow(targets) > 1) {
     targets
   } else {
@@ -34,50 +65,39 @@ getTargetList <- function(selectdrugs) {
   }
 }
 
-getSimMols <- function(input, sim.thres) {
+similarityFunction <- function(input) {
   input <- input
   fp.inp <- parseInputFingerprint(input)
-  
-  sims <- lapply(fp.inp, function(i) {
-    sim <- sapply(fp.evo, function(j) {
-      distance(i, j)
-    })
-    bar <- as.data.frame(sim)
-    bar$match <- rownames(bar)
-    bar
+
+    sims <- lapply(fp.inp, function(i) {
+      sim <- lapply(fp.db, function(j) {
+        distance(i, j)
+      })
+      bar <- ldply(sim)
+      colnames(bar) <- c("match", "similarity")
+      bar
   })
   sims <- ldply(sims)
-  sims2 <- sims %>% filter(sim >= sim.thres) %>% arrange(-sim)
-  sims2$Original_molecule_SMILES <- as.character(sims2$match)
-  sims2$`Tanimoto Similarity` <- signif(sims2$sim, 3)
-  targets <- left_join(sims2, evo, by = "Original_molecule_SMILES") %>% dplyr::select(Common_Name, `Tanimoto Similarity`) %>% distinct()
 }
 
-dbs <- c("GO_Molecular_Function_2017", "GO_Cellular_Component_2017", "GO_Biological_Process_2017", 
-         "KEGG_2016")
-
-getGeneOntologyfromTargets <- function(selectdrugs) {
-  selectdrugs <- selectdrugs
-  targets <- getTargetList(selectdrugs)
-  
-  if (nrow(targets) > 1) {
-    enriched <- enrichr(as.vector(targets$Hugo_Gene), dbs)
-  } else {
-    print("no targets")
-  }
-  
+getSimMols <- function(sims, sim.thres) {
+  sims2 <- sims %>% dplyr::filter(similarity >= sim.thres) %>% arrange(-similarity)
+  sims2$internal_id <- as.character(sims2$match)
+  sims2$`Tanimoto Similarity` <- signif(sims2$similarity, 3)
+  targets <- left_join(sims2, db) %>% 
+    dplyr::select(common_name, `Tanimoto Similarity`) %>% 
+    distinct()
 }
 
 getMolsFromGenes <- function(inp.gene) {
-  mols <- filter(evo, Hugo_Gene == inp.gene) %>% 
-    select(Structure_ID,Supplier_Molname, Common_Name, MedianActivity_nM, N_quantitative, N_qualitative, N_inactive, Original_molecule_SMILES) %>% 
-    distinct()
-  
-}
-
-getSmiles <- function(input.name) {
-  input.name <- input.name
-  input.name <- URLencode(input.name)
-  query <- as.vector(cir_query(input.name, representation = "smiles", first = TRUE))
-  query
+  genes <- trimws(unlist(strsplit(inp.gene,",")))
+  mols <- db %>% 
+    mutate(hugo_gene = as.character(hugo_gene)) %>% 
+    mutate(keep = hugo_gene %in% genes) %>% 
+    group_by(internal_id, keep) %>% 
+    mutate(count = n()) %>% 
+    filter(keep == TRUE, count >= length(genes)) %>% 
+    ungroup() %>% 
+    distinct() %>% 
+    select(-keep, -count)
 }

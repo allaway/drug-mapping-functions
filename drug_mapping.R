@@ -1,8 +1,7 @@
 library(parallel)
 source("mapping_helpers.R") ##some helper functions lifted from shiny app
 
-hugo_list <- read.table("all-symbols.tsv", sep = "\t") %>% 
-  sample_n(20)
+hugo_list <- read.table("all-symbols.tsv", sep = "\t", header = T) %>% sample_n(100)
 
 ###### TARGETS TO DRUGS ###########################################################
 
@@ -10,44 +9,42 @@ hugo_list <- read.table("all-symbols.tsv", sep = "\t") %>%
 ###parallelized = boolean indicating whether to use mclapply or not. Killing mclapply prematurely can cause zombie processes
 
 getDrugsfromGenes <- function(hugo_list, parallelized = T){
-  evo_overlap <- intersect(hugo_list, unique(evo$Hugo_Gene))
-  print(paste0(length(evo_overlap), " gene products are druggable:"))
-  print(c(evo_overlap))
-  foo <- evo %>% filter(Hugo_Gene %in% hugo_list)
-  print(paste0(length(unique(foo$Common_Name)), 
+  db_overlap <- intersect(hugo_list, unique(db$hugo_gene))
+  print(paste0(length(db_overlap), " gene products are druggable:"))
+  print(c(db_overlap))
+  foo <- db %>% filter(hugo_gene %in% hugo_list)
+  print(paste0(length(unique(foo$common_name)), 
                " drugs found from ", 
-               length(evo_overlap), 
+               length(db_overlap), 
                " genes."))
   
-  n <- length(unique(evo$Hugo_Gene))
+  n <- length(unique(db$hugo_gene))
   
   if(parallelized == T){
-    fisher.list <- mclapply(unique(foo$Common_Name), function(x){
-      evo_overlap <- evo_overlap
-      bar <- filter(evo, Common_Name == x)
-      a <- n - length(union(unique(bar$Hugo_Gene), unique(evo_overlap)))
-      b <- length(setdiff(unique(bar$Hugo_Gene), unique(evo_overlap)))
-      c <- length(setdiff(unique(evo_overlap), unique(bar$Hugo_Gene)))
-      d <- length(intersect(unique(bar$Hugo_Gene), unique(evo_overlap)))
+    fisher.list <- mclapply(unique(foo$common_name), function(x){
+      bar <- filter(db, common_name == x)
+      a <- n - length(union(unique(bar$hugo_gene), unique(db_overlap)))
+      b <- length(setdiff(unique(bar$hugo_gene), unique(db_overlap)))
+      c <- length(setdiff(unique(db_overlap), unique(bar$hugo_gene)))
+      d <- length(intersect(unique(bar$hugo_gene), unique(db_overlap)))
       res <- fisher.test(matrix(c(a,b,c,d), nrow=2), alternative="greater")
       c("p.value" = res$p.value, res$estimate, "alt" = res$alternative)
     }, mc.cores = detectCores())
   }
   
   if(parallelized == F){
-    fisher.list <- lapply(unique(foo$Common_Name), function(x){
-      evo_overlap <- evo_overlap
-      bar <- filter(evo, Common_Name == x)
-      a <- n - length(union(unique(bar$Hugo_Gene), unique(evo_overlap)))
-      b <- length(setdiff(unique(bar$Hugo_Gene), unique(evo_overlap)))
-      c <- length(setdiff(unique(evo_overlap), unique(bar$Hugo_Gene)))
-      d <- length(intersect(unique(bar$Hugo_Gene), unique(evo_overlap)))
+    fisher.list <- lapply(unique(foo$common_name), function(x){
+      bar <- filter(db, common_name == x)
+      a <- n - length(union(unique(bar$hugo_gene), unique(db_overlap)))
+      b <- length(setdiff(unique(bar$hugo_gene), unique(db_overlap)))
+      c <- length(setdiff(unique(db_overlap), unique(bar$hugo_gene)))
+      d <- length(intersect(unique(bar$hugo_gene), unique(db_overlap)))
       res <- fisher.test(matrix(c(a,b,c,d), nrow=2), alternative="greater")
       c("p.value" = res$p.value, res$estimate, "alt" = res$alternative)
     })
   }
   
-  names(fisher.list) <- unique(foo$Common_Name)
+  names(fisher.list) <- unique(foo$common_name)
   res <- ldply(fisher.list)
   res$bh2 <- p.adjust(res$p.value, method = "BH")
   res <- res %>% set_names(c("drug", "p.value", "odds ratio", "alt", "bh")) %>% select(drug, p.value, bh, `odds ratio`, alt)
@@ -56,7 +53,7 @@ getDrugsfromGenes <- function(hugo_list, parallelized = T){
 
 
 start_time <- Sys.time()
-list <- getDrugsfromGenes(hugo_list$V1, parallelized = F)
+list <- getDrugsfromGenes(hugo_list$symbol, parallelized = F)
 end_time <- Sys.time()
 end_time - start_time
 
@@ -76,30 +73,32 @@ input_struct <- structs$smiles
 ###tanimoto_threshold = 0 to 1 range for similarity, allows flexiiblity to map to structural analogs or similar molecules, where 1 is identical
    ###note that in testing this I have found that a similarity of 1 can still sometimes occur for nearly identical "large" small molecules (statins are an example)
    ###recommend 0.95 as a starting point
-###whether to use mclapply or not. Killing mclapply prematurely can cause zombie processes
+###parallelized = boolean, whether to use mclapply or not. Killing mclapply prematurely can cause zombie processes
 
 getGenesfromDrugs <- function(drugnames, input_struct, tanimoto_threshold, parallelized = T){
   if(parallelized == T){
     foo <- mclapply(input_struct, function(x){
       structure <- as.character(x)
-      getSimMols(structure, tanimoto_threshold)
+      sims <- similarityFunction(structure)
+      getSimMols(sims, tanimoto_threshold)
       }, mc.cores = detectCores())
     names(foo) <- drugnames
     bar <- ldply(foo)
-    colnames(bar) <- (c("input_drug", "Common_Name", "Tanimoto Similarity"))
+    colnames(bar) <- (c("input_drug", "common_name", "Tanimoto Similarity"))
   }
   
   if(parallelized == F){
     foo <- lapply(input_struct, function(x){
       structure <- as.character(x)
-      getSimMols(structure, tanimoto_threshold)
+      sims <- similarityFunction(structure)
+      getSimMols(sims, tanimoto_threshold)
     })
     names(foo) <- drugnames
     bar <- ldply(foo)
-    colnames(bar) <- (c("input_drug", "Common_Name", "Tanimoto Similarity"))
+    colnames(bar) <- (c("input_drug", "common_name", "Tanimoto Similarity"))
   }
   
-  bar <- inner_join(evo, bar, by = "Common_Name")
+  bar <- inner_join(db, bar, by = "common_name")
   
   
 }
