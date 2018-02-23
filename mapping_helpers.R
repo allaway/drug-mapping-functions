@@ -1,11 +1,6 @@
 options(java.parameters = "-Xmx8g" ) 
-library(shiny)
-library(DT)
 library(rJava)
 library(rcdk)
-library(fingerprint)
-library(enrichR)
-library(webchem)
 library(plyr)
 library(tidyverse)
 library(synapser)
@@ -13,9 +8,9 @@ synLogin()
 
 db <- readRDS(synGet("syn11712148")$path) %>% 
   filter(!is.na(hugo_gene)) %>% 
-  select(internal_id, common_name, hugo_gene, mean_pchembl, n_quantitative, n_qualitative)
+  select(internal_id, common_name, hugo_gene, mean_pchembl, n_quantitative, n_qualitative, known_selectivity_index, confidence)
 
-fp.db <- readRDS(synGet("syn11693143")$path)
+fp.db <- readRDS(synGet("syn11683261")$path)
 
 is.smiles <- function(x, verbose = TRUE) { ##corrected version from webchem
   if (!requireNamespace("rcdk", quietly = TRUE)) {

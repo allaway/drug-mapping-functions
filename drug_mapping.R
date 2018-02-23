@@ -50,23 +50,23 @@ getDrugsfromGenes <- function(hugo_list, parallelized = T){
   res <- res %>% set_names(c("drug", "p.value", "odds ratio", "alt", "bh")) %>% select(drug, p.value, bh, `odds ratio`, alt)
   list("drug_fisher_test" = res, "drug_target_matrix" = foo)
 }
-
-
-start_time <- Sys.time()
-list <- getDrugsfromGenes(hugo_list$symbol, parallelized = F)
-end_time <- Sys.time()
-end_time - start_time
-
-start_time <- Sys.time()
-list <- getDrugsfromGenes(hugo_list$V1, parallelized = T)
-end_time <- Sys.time()
-end_time - start_time
-
+# 
+# 
+# start_time <- Sys.time()
+# list <- getDrugsfromGenes(hugo_list$symbol, parallelized = F)
+# end_time <- Sys.time()
+# end_time - start_time
+# 
+# start_time <- Sys.time()
+# list <- getDrugsfromGenes(hugo_list$V1, parallelized = T)
+# end_time <- Sys.time()
+# end_time - start_time
+# 
 
 
 ###### DRUGS TO TARGETS ###########################################################
-structs <- read.table("drug_structures.txt", header = T, sep = "\t", comment.char = "") #overlapping FIMM/OHSU drugs annotated with structures
-input_struct <- structs$smiles
+# structs <- read.table("drug_structures.txt", header = T, sep = "\t", comment.char = "") #overlapping FIMM/OHSU drugs annotated with structures
+# input_struct <- structs$smiles
 
 ###drugnames = vector containing drug names
 ###input_struct = equal length, same order vector as drugnames containing 1 SMILES structure for each drug name
@@ -103,15 +103,15 @@ getGenesfromDrugs <- function(drugnames, input_struct, tanimoto_threshold, paral
   
 }
 
-start_time <- Sys.time()
-getGenesfromDrugs(structs$drug[1:5], structs$smiles[1:5], 0.95, parallelized = F)
-end_time <- Sys.time()
-end_time - start_time
-
-start_time <- Sys.time()
-getGenesfromDrugs(structs$drug[1:5], structs$smiles[1:5], 0.95, parallelized = T)
-end_time <- Sys.time()
-end_time - start_time
-
-genes<-getGenesfromDrugs(structs$drug[1:5], structs$smiles[1:5], 0.95, parallelized = F)
+# start_time <- Sys.time()
+# getGenesfromDrugs(structs$drug[1:5], structs$smiles[1:5], 0.95, parallelized = F)
+# end_time <- Sys.time()
+# end_time - start_time
+# 
+# start_time <- Sys.time()
+# getGenesfromDrugs(structs$drug[1:5], structs$smiles[1:5], 0.95, parallelized = T)
+# end_time <- Sys.time()
+# end_time - start_time
+# 
+# genes<-getGenesfromDrugs(structs$drug[1:5], structs$smiles[1:5], 0.95, parallelized = T)
 
