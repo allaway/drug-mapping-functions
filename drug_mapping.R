@@ -114,4 +114,3 @@ getGenesfromDrugs <- function(drugnames, input_struct, tanimoto_threshold, paral
 # end_time - start_time
 # 
 # genes<-getGenesfromDrugs(structs$drug[1:5], structs$smiles[1:5], 0.95, parallelized = T)
-

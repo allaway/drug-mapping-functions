@@ -33,3 +33,4 @@ vignettes/*.pdf
 *.knit.md
 *.rds
 *.txt
+.DS_Store

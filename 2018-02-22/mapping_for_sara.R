@@ -6,3 +6,5 @@ list <- getDrugsfromGenes(genes, parallelized = F)
 
 write.table(list[[1]], "2018-02-20_viper_druglist_fischertest.txt", row.names = F)
 write.table(list[[2]], "2018-02-20_viper_druglist.txt", row.names = F)
+
+length(genes)
