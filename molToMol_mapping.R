@@ -34,7 +34,7 @@ parseInputFingerprint <- function(input) {
 mapDrugSets <- function(names.a, smiles.a, names.b, smiles.b, similarity.cutoff){ 
 
   temp <- lapply(smiles.a, function(x){
-    suppressMessages(foo <- isTRUE(is.smiles(x)))
+    foo <- isTRUE(is.smiles(x))
     if(foo == FALSE){
       stop(paste0("SMILES ",x, " in set A is invalid."))
     }
@@ -76,5 +76,24 @@ mapDrugSets <- function(names.a, smiles.a, names.b, smiles.b, similarity.cutoff)
 ## can confuse opposite chiral centers as identical
 res <- mapDrugSets(names.a, smiles.a, names.b, smiles.b, 0.99)
 
+distanceOfTwoMols <- function(smiles.a, smiles.b){
+  temp <- lapply(smiles.a, function(x){
+    foo <- isTRUE(is.smiles(x))
+    if(foo == FALSE){
+      stop(paste0("SMILES A: ",x, " is invalid."))
+    }
+  })
+  
+  temp <- lapply(smiles.b, function(x){
+    if(isTRUE(is.smiles(x)) == FALSE){
+      stop(paste0("SMILES B:" ,x, " is invalid."))
+    }
+  })
+  
+  a <- parseInputFingerprint(as.character(smiles.a))[[1]] 
+  b <- parseInputFingerprint(as.character(smiles.b))[[1]]
+  fingerprint::distance(a,b)
+
+}
 
 
