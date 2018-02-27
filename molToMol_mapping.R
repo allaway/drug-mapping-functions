@@ -64,11 +64,11 @@ mapDrugSets <- function(names.a, smiles.a, names.b, smiles.b, similarity.cutoff)
   sims
 }
 
-#sample data
-names.a <- c("a","b","c")
-smiles.a <- c("CCCC", "CCNC", "CNNC")
-names.b <- c("1", "2", "3")
-smiles.b <- c("CNNC", "CCCC", "CNOC")
+# #sample data
+# names.a <- c("a","b","c")
+# smiles.a <- c("CCCC", "CCNC", "CNNC")
+# names.b <- c("1", "2", "3")
+# smiles.b <- c("CNNC", "CCCC", "CNOC")
 
 ## names.a, names.b = character vectors of names of compounds
 ## smiles.a, smiles.b = character vectors of SMILES of compounds, matched to names
